@@ -11,7 +11,7 @@ export interface PluginOptions {
 	runtime?: string
 }
 
-const defaultInclude = /\.[cm]?[jt]sx?$/
+const defaultInclude = /\.(?:m?[jt]s|[jt]sx)$/
 const defaultExclude = /[\\/]node_modules[\\/]/
 const ownFiles = /[\\/]otel-zoneless-context[\\/](dist|src)[\\/]/
 

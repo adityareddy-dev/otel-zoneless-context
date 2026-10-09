@@ -52,15 +52,20 @@ export function transform(code: string, id: string, options: TransformOptions = 
 
 	const rewrite = (body: Node): boolean => {
 		let found = false
+		const parents = new Map<Node, Node | null>()
 		walk(body, (node, parent) => {
 			if (node !== body && functionTypes.has(node.type)) {
 				return false
 			}
+			parents.set(node, parent)
 
 			if (node.type === 'ForOfStatement' && node.await) {
 				found = true
 				const name = `__ctxLoop${loops++}`
-				const outer = parent && parent.type === 'LabeledStatement' ? parent : node
+				let outer = node
+				while (parents.get(outer)?.type === 'LabeledStatement') {
+					outer = parents.get(outer) as Node
+				}
 				s.appendLeft(outer.start, `{const ${name} = __ctxCurrent();`)
 				s.prependLeft(outer.end, `;__ctxRestore(${name});}`)
 				if (node.body.type === 'BlockStatement') {
@@ -77,11 +82,11 @@ export function transform(code: string, id: string, options: TransformOptions = 
 
 			found = true
 			awaits++
-			const statement = parent?.type === 'ExpressionStatement'
-			s.overwrite(node.start, node.argument.start, `${statement ? ';' : ''}(__ctxValue = __ctxSettle(`)
+			// Starts with a name, not a bracket, so it never joins the line before it.
+			s.overwrite(node.start, node.argument.start, '__ctxTake((__ctxValue = __ctxSettle(')
 			s.prependLeft(
 				node.argument.end,
-				'), __ctxBack = __ctxSave(), __ctxValue = await __ctxValue, __ctxBack(), __ctxTake(__ctxValue))',
+				'), __ctxBack = __ctxSave(), __ctxValue = await __ctxValue, __ctxBack(), __ctxValue))',
 			)
 		})
 		return found
@@ -98,7 +103,7 @@ export function transform(code: string, id: string, options: TransformOptions = 
 		if (body.type === 'BlockStatement') {
 			const directives = (body.body as Node[]).filter((statement) => statement.directive)
 			const at = directives.length ? directives[directives.length - 1].end : body.start + 1
-			s.prependLeft(at, 'let __ctxValue, __ctxBack;')
+			s.prependLeft(at, `${directives.length ? ';' : ''}let __ctxValue, __ctxBack;`)
 		} else {
 			s.appendLeft(body.start, '{let __ctxValue, __ctxBack; return (')
 			s.appendLeft(body.end, ');}')
