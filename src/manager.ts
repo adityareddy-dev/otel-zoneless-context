@@ -16,7 +16,7 @@
  *
  */
 
-// Changed by Aditya Reddy on 2026-10-09 from splunk-otel-js-web packages/web/src/splunk-context-manager.ts at 3e3f139: renamed, the active context moved to a slot the await helpers share, patching on by default, guarded for pages without window, more of the patches undone on disable.
+// Changed by Aditya Reddy on 2026-10-09 from splunk-otel-js-web packages/web/src/splunk-context-manager.ts at 3e3f139: renamed with its context key, the active context moved to a slot the await helpers share, patching on by default in place of config.async, the context hooks dropped, unwrap taken from utils.ts in place of shimmer, guarded for pages without window, more of the patches undone on disable.
 
 import { type Context, type ContextManager, ROOT_CONTEXT } from '@opentelemetry/api'
 

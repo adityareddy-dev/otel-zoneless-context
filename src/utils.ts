@@ -16,7 +16,7 @@
  *
  */
 
-// Changed by Aditya Reddy on 2026-10-09: isFunction, wrapNatively and getOriginalFunction taken from splunk-otel-js-web packages/web/src/utils.ts at 3e3f139, wrap and unwrap written here in place of shimmer.
+// Changed by Aditya Reddy on 2026-10-09: isFunction, wrapNatively and getOriginalFunction taken from splunk-otel-js-web packages/web/src/utils.ts at 3e3f139, wrapNatively guarded for a missing original, wrap and unwrap written here in place of shimmer.
 
 type Wrapped = { __original?: unknown; __wrapped?: boolean }
 
