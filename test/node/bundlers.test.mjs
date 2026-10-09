@@ -1,4 +1,4 @@
-// The same suite built through the plugin on Rollup, Vite and webpack, then run in Node.
+// The same suite built through the plugin on Rollup and Vite, and on webpack too, then run in Node.
 import { execFileSync } from 'node:child_process'
 import { mkdirSync } from 'node:fs'
 import { join } from 'node:path'

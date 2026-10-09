@@ -1,7 +1,7 @@
 {
   "name": "otel-zoneless-context",
   "version": "0.1.0",
-  "description": "OpenTelemetry context manager for the browser that keeps context across native await, with a bundler plugin, no zone.js",
+  "description": "OpenTelemetry context manager for the browser without zone.js, plus a bundler plugin that rewrites the awaits in your code so the active context comes back after each one",
   "license": "Apache-2.0",
   "author": "Aditya Reddy",
   "repository": {

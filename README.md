@@ -27,7 +27,7 @@ export default {
 }
 ```
 
-`otel-zoneless-context/plugin` also exports `rollup`, `webpack` and `esbuild`, plus `rspack` and `rolldown` which I haven't tested. Options are `include` and `exclude`, a RegExp or a list of them. By default every `.js`, `.mjs`, `.ts`, `.mts`, `.jsx` and `.tsx` file outside `node_modules` gets rewritten. `runtime` sets where the helpers get imported from. The manager takes `{ patch: false }` to leave the browser APIs alone.
+`otel-zoneless-context/plugin` also exports `rollup`, `webpack`, `esbuild`, `rspack` and `rolldown`, and I haven't tested the last two. Options are `include` and `exclude`, a RegExp or a list of them. By default every `.js`, `.mjs`, `.ts`, `.mts`, `.jsx` and `.tsx` file outside `node_modules` gets rewritten. `runtime` sets where the helpers get imported from. The manager takes `{ patch: false }` to leave the browser APIs alone.
 
 ## What the plugin does
 
