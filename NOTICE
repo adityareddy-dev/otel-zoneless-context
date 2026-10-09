@@ -1,0 +1,15 @@
+otel-zoneless-context
+Copyright 2026 Aditya Reddy
+
+This product includes software from splunk-otel-js-web
+(https://github.com/signalfx/splunk-otel-js-web), Copyright 2020-2026 Splunk Inc.,
+licensed under the Apache License, Version 2.0.
+
+src/manager.ts is a changed copy of packages/web/src/splunk-context-manager.ts and
+src/utils.ts holds three functions from packages/web/src/utils.ts, both taken at
+commit 3e3f139f48a5936e594a2a50a52b142058e3d968. splunk-otel-js-web has no NOTICE
+file at that commit, so there was none to carry over.
+
+The Splunk context manager says in its source that it copies the StackContextManager
+from OpenTelemetry JS (https://github.com/open-telemetry/opentelemetry-js),
+Copyright The OpenTelemetry Authors, licensed under the Apache License, Version 2.0.
