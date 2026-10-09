@@ -79,7 +79,7 @@ In #5914 the three others lose the span at `test2` and `general.end`, the same t
 - A library the plugin doesn't rewrite, which awaits and then calls back into your code. The callback saw no context in the test (the library callback row).
 - `setTimeout` with a delay over 34 ms doesn't carry the context. That's Splunk's cut-off and I kept it.
 - Each await gets one more promise and a closure. I haven't measured what that does to a real app.
-- Angular CLI builds. I tried Angular 22.2.2 with @angular-builders/custom-esbuild 22.0.1 on 2026-10-09 and nothing got rewritten. That builder adds plugins after Angular's own compiler plugin, and that one loads every `.ts` and `.js` file itself, so this plugin never sees the code.
+- Angular CLI's default builder. I tried Angular 22.2.2 with @angular-builders/custom-esbuild 22.0.1 on 2026-10-09 and nothing got rewritten. That builder adds plugins after Angular's own compiler plugin, and that one loads every `.ts` and `.js` file itself, so this plugin never sees the code. The older webpack builder (`@angular-devkit/build-angular:browser`) turns async functions into generators, which go through the patched `then`. In the same scratch app built that way the manager kept the context with nothing rewritten, 13 of 13 checks on the #5914 steps and two flows.
 - Not tested yet: rspack, rolldown, `yield` inside an async generator, async code downleveled to generators, and the plugin over `node_modules`.
 
 ## Credit
