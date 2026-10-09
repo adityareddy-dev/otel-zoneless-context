@@ -1,7 +1,7 @@
 // One small case per shape, each runs two flows at once with crossing timers.
-import { context, ROOT_CONTEXT } from '@opentelemetry/api'
+import { context, ROOT_CONTEXT, trace } from '@opentelemetry/api'
 
-import { check, KEY, rejectAfter, sleep } from './harness.mjs'
+import { check, KEY, record, rejectAfter, sleep } from './harness.mjs'
 import { vendorFetch } from './vendor/lib.mjs'
 
 const both = async (a, b) => {
@@ -81,6 +81,16 @@ const classShape = (n) => async () => {
 	check('class method', n, 'caller, after awaiting it')
 }
 
+const spanShape = (n) => async () => {
+	const name = `span ${n}`
+	await trace.getTracer('shapes').startActiveSpan(name, async (span) => {
+		await sleep(delays[n][0])
+		check('startActiveSpan', n, 'flow value after await')
+		record('startActiveSpan', n, 'active span after await', name, trace.getActiveSpan() === span ? name : null)
+		span.end()
+	})
+}
+
 const thenShape = (n) => async () => {
 	await sleep(delays[n][0]).then(() => check('.then callback', n, 'awaited'))
 	sleep(delays[n][1]).then(() => check('.then callback', n, 'not awaited'))
@@ -133,6 +143,7 @@ export const shapes = async () => {
 	await both(nestedShape('A'), nestedShape('B'))
 	await both(allShape('A'), allShape('B'))
 	await both(classShape('A'), classShape('B'))
+	await both(spanShape('A'), spanShape('B'))
 	await both(thenShape('A'), thenShape('B'))
 	await both(vendorShape('A'), vendorShape('B'))
 	await race('reject and resolve in one task, reject first', true)

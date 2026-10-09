@@ -1,5 +1,4 @@
-// What each manager got on 2026-10-09, case by case, as passing checks out of the total.
-// The prior managers' rows are their observed misses, so a change in any of them fails the run.
+// What each manager got on 2026-10-09, misses included so any change fails the run.
 
 const lost = {
 	5914: [4, 6],
@@ -11,6 +10,7 @@ const lost = {
 	'nested async arrow': [0, 6],
 	'Promise.all': [0, 4],
 	'class method': [0, 4],
+	startActiveSpan: [0, 4],
 	'.then callback': [0, 6],
 	'library callback': [0, 4],
 	'reject and resolve in one task, reject first': [0, 2],
@@ -27,6 +27,7 @@ const kept = {
 	'nested async arrow': [6, 6],
 	'Promise.all': [4, 4],
 	'class method': [4, 4],
+	startActiveSpan: [4, 4],
 	'.then callback': [6, 6],
 	'library callback': [2, 4],
 	'reject and resolve in one task, reject first': [2, 2],
