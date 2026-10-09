@@ -53,7 +53,7 @@ It runs before TypeScript and JSX are compiled and takes every async function, t
 
 ## Results
 
-Run on 2026-10-09 on Windows in headless Chromium 153.0.8010.12 with `@opentelemetry/api` 1.9.1, `@opentelemetry/sdk-trace-web` and `@opentelemetry/context-zone` 2.12.0, zone.js 0.16.3, built with esbuild 0.28.2 to `esnext` so every await stays native. Every case except #5914 runs two flows, A and B, at the same time on timers that cross, and after each await checks that the active context is still its own. The leak row checks from code outside both flows that it sees no context at all. The #5914 row is the repro from [that issue](https://github.com/open-telemetry/opentelemetry-js/issues/5914) with the same function names, its console logs swapped for a check that the `repro` span is active.
+Run on 2026-10-09 on Windows in headless Chromium 156.0.8078.4 with `@opentelemetry/api` 1.9.1, `@opentelemetry/sdk-trace-web` and `@opentelemetry/context-zone` 2.12.0, zone.js 0.16.3, built with esbuild 0.28.2 to `esnext` so every await stays native. Every case except #5914 runs two flows, A and B, at the same time on timers that cross, and after each await checks that the active context is still its own. The leak row checks from code outside both flows that it sees no context at all. The #5914 row is the repro from [that issue](https://github.com/open-telemetry/opentelemetry-js/issues/5914) with the same function names, its console logs swapped for a check that the `repro` span is active.
 
 | case | stack manager | zone manager | this one, plugin off | this one, plugin on |
 | --- | --- | --- | --- | --- |
