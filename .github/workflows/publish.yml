@@ -14,9 +14,11 @@ jobs:
       - uses: actions/checkout@v5
       - uses: actions/setup-node@v5
         with:
+          # Trusted publishing needs npm 11.5.1 or later and Node 22.14 or later.
           node-version: 24
           registry-url: https://registry.npmjs.org
       - run: npm ci
+      # Trusted publishing needs no secret. On npmjs.com, in the package's settings under Trusted
+      # publishing, choose GitHub Actions with user adityareddy-dev, repository otel-zoneless-context
+      # and workflow filename publish.yml.
       - run: npm publish --provenance --access public
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
