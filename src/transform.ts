@@ -46,11 +46,28 @@ export function transform(code: string, id: string, options: TransformOptions = 
 		throw new SyntaxError(`${id}: ${errors.map((e) => e.message).join('\n')}`)
 	}
 
+	const names = new Set<string>()
+	walk(program as unknown as Node, (node) => {
+		if (node.type === 'Identifier' || node.type === 'JSXIdentifier') names.add(node.name)
+	})
+	const allocate = (base: string): string => {
+		let name = base
+		let suffix = 1
+		while (names.has(name)) name = base + suffix++
+		names.add(name)
+		return name
+	}
+	const settle = allocate('__ctxSettle')
+	const take = allocate('__ctxTake')
+	const save = allocate('__ctxSave')
+	const current = allocate('__ctxCurrent')
+	const restore = allocate('__ctxRestore')
+
 	const s = new MagicString(code)
 	let awaits = 0
 	let loops = 0
 
-	const rewrite = (body: Node): boolean => {
+	const rewrite = (body: Node, value: string, back: string): boolean => {
 		let found = false
 		const parents = new Map<Node, Node | null>()
 		walk(body, (node, parent) => {
@@ -61,17 +78,17 @@ export function transform(code: string, id: string, options: TransformOptions = 
 
 			if (node.type === 'ForOfStatement' && node.await) {
 				found = true
-				const name = `__ctxLoop${loops++}`
+				const name = allocate(`__ctxLoop${loops++}`)
 				let outer = node
 				while (parents.get(outer)?.type === 'LabeledStatement') {
 					outer = parents.get(outer) as Node
 				}
-				s.appendLeft(outer.start, `{const ${name} = __ctxCurrent();try{`)
-				s.prependLeft(outer.end, `}finally{__ctxRestore(${name});}}`)
+				s.appendLeft(outer.start, `{const ${name} = ${current}();try{`)
+				s.prependLeft(outer.end, `}finally{${restore}(${name});}}`)
 				if (node.body.type === 'BlockStatement') {
-					s.appendLeft(node.body.start + 1, `__ctxRestore(${name});`)
+					s.appendLeft(node.body.start + 1, `${restore}(${name});`)
 				} else {
-					s.appendLeft(node.body.start, `{__ctxRestore(${name});`)
+					s.appendLeft(node.body.start, `{${restore}(${name});`)
 					s.prependLeft(node.body.end, '}')
 				}
 			}
@@ -83,10 +100,10 @@ export function transform(code: string, id: string, options: TransformOptions = 
 			found = true
 			awaits++
 			// Starts with a name, not a bracket, so it never joins the line before it.
-			s.overwrite(node.start, node.argument.start, '__ctxTake((__ctxValue = __ctxSettle(')
+			s.overwrite(node.start, node.argument.start, `${take}((${value} = ${settle}(`)
 			s.prependLeft(
 				node.argument.end,
-				'), __ctxBack = __ctxSave(), __ctxValue = await __ctxValue, __ctxBack(), __ctxValue))',
+				`), ${back} = ${save}(), ${value} = await ${value}, ${back}(), ${value}))`,
 			)
 		})
 		return found
@@ -97,28 +114,32 @@ export function transform(code: string, id: string, options: TransformOptions = 
 			return
 		}
 		const body = node.body as Node
-		if (!rewrite(body)) {
+		const value = allocate('__ctxValue')
+		const back = allocate('__ctxBack')
+		if (!rewrite(body, value, back)) {
 			return
 		}
 		if (body.type === 'BlockStatement') {
 			const directives = (body.body as Node[]).filter((statement) => statement.directive)
 			const at = directives.length ? directives[directives.length - 1].end : body.start + 1
-			s.prependLeft(at, `${directives.length ? ';' : ''}let __ctxValue, __ctxBack;`)
+			s.prependLeft(at, `${directives.length ? ';' : ''}let ${value}, ${back};`)
 		} else {
-			s.appendLeft(body.start, '{let __ctxValue, __ctxBack; return (')
+			s.appendLeft(body.start, `{let ${value}, ${back}; return (`)
 			s.appendLeft(body.end, ');}')
 		}
 	})
 
-	const topLevel = rewrite(program as unknown as Node)
+	const value = allocate('__ctxValue')
+	const back = allocate('__ctxBack')
+	const topLevel = rewrite(program as unknown as Node, value, back)
 	if (!awaits && !loops) {
 		return null
 	}
 
 	const runtime = JSON.stringify(options.runtime ?? 'otel-zoneless-context/runtime')
 	const head =
-		`import { settle as __ctxSettle, take as __ctxTake, save as __ctxSave, current as __ctxCurrent, restore as __ctxRestore } from ${runtime};` +
-		(topLevel ? 'let __ctxValue, __ctxBack;' : '')
+		`import { settle as ${settle}, take as ${take}, save as ${save}, current as ${current}, restore as ${restore} } from ${runtime};` +
+		(topLevel ? `let ${value}, ${back};` : '')
 	const hashbang = (program as unknown as Node).hashbang as Node | null | undefined
 	if (hashbang) {
 		s.appendLeft(hashbang.end, `\n${head}`)

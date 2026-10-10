@@ -211,3 +211,43 @@ export async function run() {
 		assert.deepEqual(await runRewritten(code), ['A', ...middle, true, 'A'])
 	})
 }
+
+test('a user local named __ctxValue keeps its value', async () => {
+	const code = 'export async function run() { const __ctxValue = 1; await Promise.resolve(); return __ctxValue }'
+	parses(transform(code, 'in.mjs').code)
+	assert.equal(await runRewritten(code), 1)
+})
+
+test('helper imports and locals avoid bindings and references throughout the file', async () => {
+	const code = String.raw`
+const __ctxTake = 2, __ctxSave = 3, __ctxCurrent = 4, __ctxRestore = 5
+const __ctxLoop0 = 6, __ctxValue = 7, __ctxValue1 = 8, __ctxBack = 9
+const __ctxSet\u0074le = 10
+const f = async (__ctxValue2) => {
+	const inner = async (__ctxBack1) => { await 1; return __ctxBack1 }
+	for await (const __ctxLoop01 of [1]) { await 1 }
+	return [__ctxValue2, await inner(11)]
+}
+export async function run() {
+	await 1
+	return [__ctxTake, __ctxSave, __ctxCurrent, __ctxRestore, __ctxLoop0, __ctxValue, __ctxValue1, __ctxBack, __ctxSet\u0074le, await f(12)]
+}
+`
+	const result = transform(code, 'in.mjs')
+	parses(result.code)
+	assert.match(result.code, /settle as __ctxSettle1/)
+	assert.deepEqual(await runRewritten(code), [2, 3, 4, 5, 6, 7, 8, 9, 10, [12, 11]])
+})
+
+test('top level locals and imports avoid existing import names', () => {
+	const code = 'import { value as __ctxTake } from "user"; const __ctxValue = 1; await load(__ctxValue, __ctxTake)'
+	const result = transform(code, 'in.mjs')
+	parses(result.code)
+	assert.match(result.code, /take as __ctxTake1/)
+	assert.match(result.code, /let __ctxValue1, __ctxBack/)
+})
+
+test('generated locals leave free references alone', async () => {
+	const code = 'export async function run() { await 1; return [typeof __ctxValue, typeof __ctxBack] }'
+	assert.deepEqual(await runRewritten(code), ['undefined', 'undefined'])
+})
