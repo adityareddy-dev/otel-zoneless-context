@@ -1,4 +1,4 @@
-import { createUnplugin } from 'unplugin'
+import { createUnplugin, type RspackPluginInstance } from 'unplugin'
 
 import { transform } from './transform.js'
 
@@ -42,6 +42,6 @@ export const vite = unplugin.vite
 export const rollup = unplugin.rollup
 export const rolldown = unplugin.rolldown
 export const webpack = unplugin.webpack
-export const rspack = unplugin.rspack
+export const rspack: (options?: PluginOptions) => RspackPluginInstance = unplugin.rspack
 export const esbuild = unplugin.esbuild
 export default unplugin
