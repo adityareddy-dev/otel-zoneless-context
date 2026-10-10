@@ -36,14 +36,55 @@ function walk(node: Node, enter: (node: Node, parent: Node | null) => boolean | 
 }
 
 export function transform(code: string, id: string, options: TransformOptions = {}): TransformResult | null {
-	// Files without the word are left alone without parsing, and a file is never rewritten twice.
-	if (!code.includes('await') || code.includes('__ctxSettle')) {
+	// Files without await are left alone without parsing.
+	if (!code.includes('await')) {
 		return null
 	}
 
 	const { program, errors } = parseSync(id, code, { sourceType: 'module', preserveParens: true })
 	if (errors.length) {
 		throw new SyntaxError(`${id}: ${errors.map((e) => e.message).join('\n')}`)
+	}
+
+	const runtimeSource = options.runtime ?? 'otel-zoneless-context/runtime'
+	const unwrap = (node: Node): Node => node.type === 'ParenthesizedExpression' ? unwrap(node.expression) : node
+	const call = (node: Node | undefined, name: string): boolean =>
+		node?.type === 'CallExpression' && node.callee.type === 'Identifier' && node.callee.name === name
+	for (const statement of (program as unknown as Node).body as Node[]) {
+		if (statement.type !== 'ImportDeclaration' || statement.source.value !== runtimeSource) continue
+		const helpers = new Map<string, string>()
+		for (const specifier of statement.specifiers as Node[]) {
+			if (specifier.type === 'ImportSpecifier') helpers.set(specifier.imported.name, specifier.local.name)
+		}
+		const settle = helpers.get('settle')
+		const take = helpers.get('take')
+		const save = helpers.get('save')
+		const current = helpers.get('current')
+		const restore = helpers.get('restore')
+		if (!settle || !take || !save || !current || !restore) continue
+		let injected = false
+		walk(program as unknown as Node, (node) => {
+			if (call(node, take) && node.arguments.length === 1) {
+				const sequence = unwrap(node.arguments[0])
+				if (sequence.type !== 'SequenceExpression' || sequence.expressions.length !== 5) return
+				const [value, back, awaited, resume, result] = sequence.expressions as Node[]
+				if (value.type !== 'AssignmentExpression' || back.type !== 'AssignmentExpression' || awaited.type !== 'AssignmentExpression') return
+				injected ||= call(value.right, settle) && call(back.right, save) &&
+					awaited.right.type === 'AwaitExpression' && awaited.right.argument.name === value.left.name &&
+					awaited.left.name === value.left.name && call(resume, back.left.name) && result.name === value.left.name
+			}
+			if (node.type === 'BlockStatement' && node.body.length === 2) {
+				const [declaration, guarded] = node.body as Node[]
+				if (declaration.type !== 'VariableDeclaration' || declaration.declarations.length !== 1 || guarded.type !== 'TryStatement') return
+				const saved = declaration.declarations[0] as Node
+				const resumed = guarded.finalizer?.body[0]?.expression as Node | undefined
+				let loop = guarded.block.body[0] as Node | undefined
+				while (loop?.type === 'LabeledStatement') loop = loop.body
+				injected ||= call(saved.init, current) && call(resumed, restore) &&
+					resumed?.arguments[0]?.name === saved.id.name && loop?.type === 'ForOfStatement' && loop.await
+			}
+		})
+		if (injected) return null
 	}
 
 	const names = new Set<string>()
@@ -136,7 +177,7 @@ export function transform(code: string, id: string, options: TransformOptions = 
 		return null
 	}
 
-	const runtime = JSON.stringify(options.runtime ?? 'otel-zoneless-context/runtime')
+	const runtime = JSON.stringify(runtimeSource)
 	const head =
 		`import { settle as ${settle}, take as ${take}, save as ${save}, current as ${current}, restore as ${restore} } from ${runtime};` +
 		(topLevel ? `let ${value}, ${back};` : '')

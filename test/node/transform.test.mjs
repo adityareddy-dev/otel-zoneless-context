@@ -251,3 +251,60 @@ test('generated locals leave free references alone', async () => {
 	const code = 'export async function run() { await 1; return [typeof __ctxValue, typeof __ctxBack] }'
 	assert.deepEqual(await runRewritten(code), ['undefined', 'undefined'])
 })
+
+test('the __ctxSettle marker in a string does not skip rewriting', async () => {
+	const code = contextSetup + `
+export const marker = '__ctxSettle'
+export async function run() {
+	return manager.with(ROOT_CONTEXT.setValue(key, 'A'), async () => {
+		await Promise.resolve()
+		return active()
+	})
+}
+`
+	const result = transform(code, 'in.mjs')
+	assert.equal(result.awaits, 1)
+	assert.equal(transform(result.code, 'in.mjs'), null)
+	assert.equal(await runRewritten(code), 'A')
+})
+
+for (const source of [
+	'// __ctxSettle\nexport async function run() { await 1; return 2 }',
+	'export async function run() { const __ctxSettle = 2; await 1; return __ctxSettle }',
+]) {
+	test('a helper name alone does not skip rewriting: ' + source, async () => {
+		const result = transform(source, 'in.mjs')
+		assert.ok(result)
+		parses(result.code)
+		assert.equal(transform(result.code, 'in.mjs'), null)
+		assert.equal(await runRewritten(source), 2)
+	})
+}
+
+for (const source of [
+	'async function f(it) { for await (const value of it) {} }',
+	'async function f(it) { a: b: for await (const value of it) continue a }',
+	'const __ctxSettle = 1, __ctxValue = 2; async function f() { await g() }',
+	'const __ctxCurrent = 1, __ctxLoop0 = 2; async function f(it) { for await (const value of it) {} }',
+	'await g()',
+]) {
+	test('second pass recognizes helper use: ' + source, () => {
+		for (const options of [{}, { runtime: './custom-runtime.mjs' }]) {
+			const result = transform(source, 'in.mjs', options)
+			assert.ok(result)
+			parses(result.code)
+			assert.equal(transform(result.code, 'in.mjs', options), null)
+		}
+	})
+}
+
+test('a runtime import and ordinary helper calls do not skip the file', () => {
+	const source = `
+import { settle as __ctxSettle, take as __ctxTake, save as __ctxSave, current as __ctxCurrent, restore as __ctxRestore } from 'otel-zoneless-context/runtime'
+export async function run() { return __ctxTake(await __ctxSettle(1)) }
+`
+	const result = transform(source, 'in.mjs')
+	assert.equal(result.awaits, 1)
+	parses(result.code)
+	assert.equal(transform(result.code, 'in.mjs'), null)
+})
