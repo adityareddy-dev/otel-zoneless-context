@@ -113,3 +113,101 @@ test('a rejected await still throws into the catch', async () => {
 	const code = "export async function run() { try { await Promise.reject(new Error('no')) } catch (e) { return e.message } }"
 	assert.equal(await runRewritten(code), 'no')
 })
+
+for (const source of [
+	'async function f(it) { a: b: for await (const x of it) { continue a } }',
+	'async function f(it, c) { if (c) for await (const x of it) use(x); else other() }',
+]) {
+	test('for await restoration is in finally: ' + source, () => {
+		const result = transform(source, 'in.mjs')
+		parses(result.code)
+		const { program } = parseSync('out.mjs', result.code, { sourceType: 'module' })
+		const body = program.body.find((node) => node.type === 'FunctionDeclaration').body.body
+		const wrapper = body.find((node) => node.type === 'BlockStatement' || node.type === 'IfStatement')
+		const block = wrapper.type === 'IfStatement' ? wrapper.consequent : wrapper
+		const guarded = block.body.find((node) => node.type === 'TryStatement')
+		assert.equal(guarded.finalizer.body[0].expression.callee.name, '__ctxRestore')
+		let loop = guarded.block.body[0]
+		while (loop.type === 'LabeledStatement') loop = loop.body
+		assert.equal(loop.type, 'ForOfStatement')
+		assert.equal(loop.await, true)
+	})
+}
+
+const contextSetup = `
+import { ROOT_CONTEXT, createContextKey } from '@opentelemetry/api'
+import { ZonelessContextManager } from 'otel-zoneless-context'
+const manager = new ZonelessContextManager({ patch: false })
+const key = createContextKey('iterator')
+const active = () => manager.active().getValue(key) ?? null
+`
+
+test('a rejected iterator restores both interleaved contexts in catch and finally', async () => {
+	const code = contextSetup + `
+export async function run() {
+	const flow = (name, delay) => manager.with(ROOT_CONTEXT.setValue(key, name), async () => {
+		const seen = []
+		let closed = false
+		const iterator = {
+			[Symbol.asyncIterator]() { return this },
+			next() { return new Promise((_, reject) => setTimeout(() => reject(new Error('iterator failed')), delay)) },
+			return() { closed = true; return Promise.resolve({ done: true }) },
+		}
+		try {
+			for await (const value of iterator) { void value }
+		} catch (error) {
+			seen.push(error.message, active())
+		} finally {
+			seen.push(active(), closed)
+		}
+		seen.push(active())
+		return seen
+	})
+	return Promise.all([flow('A', 10), flow('B', 5)])
+}
+`
+	assert.deepEqual(await runRewritten(code), [
+		['iterator failed', 'A', 'A', false, 'A'],
+		['iterator failed', 'B', 'B', false, 'B'],
+	])
+})
+
+for (const exit of ['break', 'return', 'throw', 'continue', 'close rejection']) {
+	test('for await restores after iterator cleanup on ' + exit, async () => {
+		const code = contextSetup + `
+export async function run() {
+	const seen = []
+	let closed = false
+	const iterator = {
+		[Symbol.asyncIterator]() { return this },
+		next() { return Promise.resolve({ value: 1, done: false }) },
+		return() {
+			return new Promise((resolve, reject) => setTimeout(() => {
+				closed = true
+				if (${JSON.stringify(exit)} === 'close rejection') reject(new Error('close'))
+				else resolve({ done: true })
+			}, 5))
+		},
+	}
+	const leave = () => manager.with(ROOT_CONTEXT.setValue(key, 'A'), async () => {
+		try {
+			outer: for (let i = 0; i < 1; i++) {
+				for await (const value of iterator) {
+					seen.push(active())
+					${exit === 'return' ? 'return value' : exit === 'throw' ? "throw new Error('body')" : exit === 'continue' ? 'continue outer' : 'break'}
+				}
+			}
+		} catch (error) {
+			seen.push(error.message, active())
+		} finally {
+			seen.push(closed, active())
+		}
+	})
+	await leave()
+	return seen
+}
+`
+		const middle = exit === 'throw' ? ['body', 'A'] : exit === 'close rejection' ? ['close', 'A'] : []
+		assert.deepEqual(await runRewritten(code), ['A', ...middle, true, 'A'])
+	})
+}

@@ -66,8 +66,8 @@ export function transform(code: string, id: string, options: TransformOptions = 
 				while (parents.get(outer)?.type === 'LabeledStatement') {
 					outer = parents.get(outer) as Node
 				}
-				s.appendLeft(outer.start, `{const ${name} = __ctxCurrent();`)
-				s.prependLeft(outer.end, `;__ctxRestore(${name});}`)
+				s.appendLeft(outer.start, `{const ${name} = __ctxCurrent();try{`)
+				s.prependLeft(outer.end, `}finally{__ctxRestore(${name});}}`)
 				if (node.body.type === 'BlockStatement') {
 					s.appendLeft(node.body.start + 1, `__ctxRestore(${name});`)
 				} else {
