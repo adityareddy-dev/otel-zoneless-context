@@ -47,6 +47,58 @@ const forAwaitShape = (n) => async () => {
 	check('for await', n, 'after the loop')
 }
 
+const forAwaitRejectShape = (n) => async () => {
+	const iterator = {
+		[Symbol.asyncIterator]() { return this },
+		next() { return rejectAfter(delays[n][0]) },
+	}
+	try {
+		for await (const value of iterator) {
+			void value
+		}
+	} catch {
+		check('for await rejection', n, 'in catch')
+	} finally {
+		check('for await rejection', n, 'in finally')
+	}
+	check('for await rejection', n, 'after the loop')
+}
+
+const forAwaitExitShape = (n, exit) => async () => {
+	const label = 'for await ' + exit
+	let closed = false
+	const iterator = {
+		[Symbol.asyncIterator]() { return this },
+		next() { return sleep(delays[n][0]).then(() => ({ value: 1, done: false })) },
+		return() {
+			return sleep(delays[n][1]).then(() => {
+				closed = true
+				return { done: true }
+			})
+		},
+	}
+	const leave = async () => {
+		try {
+			outer: for (let i = 0; i < 1; i++) {
+				for await (const value of iterator) {
+					check(label, n, 'in body')
+					if (exit === 'return') return value
+					if (exit === 'throw') throw new Error('exit')
+					if (exit === 'continue') continue outer
+					break
+				}
+			}
+		} catch {
+			check(label, n, 'in catch')
+		} finally {
+			check(label, n, 'after cleanup')
+			record(label, n, 'iterator closed', true, closed)
+		}
+	}
+	await leave()
+	check(label, n, 'caller, after exit')
+}
+
 const nestedShape = (n) => async () => {
 	const inner = async () => {
 		await sleep(delays[n][0])
@@ -140,6 +192,10 @@ export const shapes = async () => {
 	await both(tryShape('A'), tryShape('B'))
 	await both(forShape('A'), forShape('B'))
 	await both(forAwaitShape('A'), forAwaitShape('B'))
+	await both(forAwaitRejectShape('A'), forAwaitRejectShape('B'))
+	for (const exit of ['break', 'return', 'throw', 'continue']) {
+		await both(forAwaitExitShape('A', exit), forAwaitExitShape('B', exit))
+	}
 	await both(nestedShape('A'), nestedShape('B'))
 	await both(allShape('A'), allShape('B'))
 	await both(classShape('A'), classShape('B'))
